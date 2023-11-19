@@ -1,0 +1,1 @@
+export const convertSecondsToHours = (seconds: number) => seconds / 3600;

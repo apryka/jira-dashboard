@@ -1,7 +1,7 @@
-import Dropdown from "@/components/Dropdown";
 import Loader from "@/components/Loader";
 import ProjectSelector from "@/components/ProjectSelector";
-import UsersSelector from "@/components/UsersSelector";
+import SprintSelector from "@/components/SprintSelector";
+import UsersSelector from "@/components/UserSelector";
 import { convertSecondsToHours } from "@/utils/convertSecondsToHours";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -15,45 +15,31 @@ const AuthorizationHeader = {
     "Basic " + btoa(`${process.env.API_USER_NAME}:${process.env.API_TOKEN}`),
 };
 
+const getDataFromApi = async (url: string) => {
+  const data = await fetch(url, {
+    headers: { ...AuthorizationHeader },
+    cache: "no-cache",
+  });
+  const result = await data.json();
+  return result;
+}
+
 export default async function Home({ searchParams }: Props) {
-  console.log(searchParams);
-  // const data = await fetch(`${process.env.API_REST_URL}users/search`, {
-  //   headers: { 'Authorization': 'Basic ' + btoa(`${process.env.API_USER_NAME}:${process.env.API_TOKEN}`) }
-  // });
-  // const users = await data.json();
-  // const filteredUsers = users?.filter(({ accountType } : {accountType: string}) => accountType === 'atlassian') ?? [];
-
-  // const sprintData = await fetch(`${process.env.API_AGILE_URL}board/21/sprint`, {
-  //   headers: { 'Authorization': 'Basic ' + btoa(`${process.env.API_USER_NAME}:${process.env.API_TOKEN}`) }
-  // });
-  // const sprints = await sprintData.json();
-  
-  const usersAssignedToProjectData = await fetch(
-    `${process.env.API_REST_URL}user/search/query?query=is assignee of ${searchParams.project}`,
-    {
-      headers: { ...AuthorizationHeader },
-    }
-  );
-  const usersAssignedToProject = await usersAssignedToProjectData.json();
-
-  const projectsData = await fetch(
-    `${process.env.API_REST_URL}project/search`,
-    {
-      headers: { ...AuthorizationHeader },
-    }
-  );
-  const projects = await projectsData.json();
+  const usersAssignedToProject = await getDataFromApi(`${process.env.API_REST_URL}user/search/query?query=is assignee of ${searchParams.project}`);
+  const projects = await getDataFromApi(`${process.env.API_REST_URL}project/search`);
 
   const selectedUserName = searchParams?.user && usersAssignedToProject?.values?.find((u:any) => u.accountId === searchParams.user)?.displayName;
 
-  const projectData = await fetch(
-    `${process.env.API_REST_URL}search?jql=project = "${searchParams.project}" ${selectedUserName ? `and assignee = "${selectedUserName} "` : ""}and type = Subtask&fields=*all`,
-    {
-      headers: { ...AuthorizationHeader },
-    }
-  );
-  const project = await projectData.json();
+  const project = await getDataFromApi(`${process.env.API_REST_URL}search?jql=project = "${searchParams.project}" ${selectedUserName ? `and assignee = "${selectedUserName} "` : ""}and type = Subtask&fields=*all`);
+  const boards = await getDataFromApi(`${process.env.API_AGILE_URL}board`);
 
+  const currentBoardId = boards?.values?.find((b:any) => b?.location?.projectKey === searchParams.project)?.id;
+  
+  let sprintsInProject = null;
+
+  if (currentBoardId) {
+    sprintsInProject = await getDataFromApi(`${process.env.API_AGILE_URL}board/${currentBoardId}/sprint`)
+  }
 
   const totalEstimatedTime = project?.issues?.reduce(
     (acc: number, issue: any) => {
@@ -111,9 +97,6 @@ export default async function Home({ searchParams }: Props) {
         <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
           <ProjectSelector projects={projects.values} />
           <Suspense fallback={<Loader />}>
-            {/* {project && (
-              <pre className="my-6">{JSON.stringify(project, null, 2)}</pre>
-            )} */}
             {project?.issues?.length === 0 ? (
               <h4 className="text-xl my-8">No issues to display</h4>
             ) : (
@@ -151,6 +134,11 @@ export default async function Home({ searchParams }: Props) {
                             className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                           >
                             Sprint
+                            {sprintsInProject?.values?.length && (
+                              <div className="mt-1">
+                                <SprintSelector sprints={sprintsInProject?.values} />
+                              </div>
+                            )}
                           </th>
                           <th
                             scope="col"

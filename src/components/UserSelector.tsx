@@ -18,7 +18,7 @@ const ALL_USERS = {
   name: 'All Users'
 };
 
-export default function UsersSelector({
+export default function UserSelector({
   users,
 }: UserSelectorProps) {
   const { push } = useRouter();
